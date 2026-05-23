@@ -107,6 +107,8 @@ function filterCompanies() {
         
         if (statusFilter === 'HAS_JOBS') {
             return jobsList.length > 0;
+        } else if (statusFilter === 'HAS_URL') {
+            return !!c.site_url;
         } else if (statusFilter === 'NO_URL') {
             return !c.site_url;
         } else if (statusFilter === 'PENDING') {

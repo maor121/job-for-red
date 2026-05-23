@@ -222,9 +222,10 @@ def search_website_for_business(business_name):
                         print(f"[SEARCH RESOLVER] Gemini verification exception: {e}. Falling back to strict local heuristic.")
                 
                 # --- Mode B: Strict Local Heuristic Match ---
-                # Split business name into keywords, ignoring stop-words
-                stop_words = {'בע"מ', 'בעמ', 'ישראל', 'קבוצת', 'שירותי', 'מערכות', 'פתרונות', 'כספים', 'אחזקות', 'ltd', 'group', 'israel', 'systems', 'solutions', 'holdings', 'services', 'inc', 'corp', 'co'}
-                name_words = [re.sub(r'[^\w\s]', '', w).lower() for w in business_name.split()]
+                # Split business name into keywords, ignoring stop-words and splitting by delimiters cleanly
+                stop_words = {'בע"מ', 'בעמ', 'ישראל', 'קבוצת', 'שירותי', 'שרותי', 'מערכות', 'פתרונות', 'כספים', 'אחזקות', 'ltd', 'group', 'israel', 'systems', 'solutions', 'holdings', 'services', 'inc', 'corp', 'co'}
+                normalized_name = business_name.replace("/", " ").replace("-", " ").replace(",", " ")
+                name_words = [re.sub(r'[^\w\s]', '', w).lower() for w in normalized_name.split()]
                 keywords = [w for w in name_words if len(w) > 1 and w not in stop_words]
                 
                 if not keywords:
@@ -239,11 +240,10 @@ def search_website_for_business(business_name):
                     url_lower = r['url'].lower()
                     
                     # Check if ANY keyword matches the search result
-                    # We require at least one strong keyword match in the title or the URL
+                    # Match in title, URL, OR snippet description for high-recall Hebrew-to-English resolution
                     matched = False
                     for kw in keywords:
-                        # Match english/hebrew words
-                        if kw in title_lower or kw in url_lower:
+                        if kw in title_lower or kw in url_lower or kw in snippet_lower:
                             matched = True
                             break
                             

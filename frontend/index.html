@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSR Towers | Job Crawler Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;800&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="brand">
+                <span class="brand-icon">⚡</span>
+                <h1>BSR CRAWLER</h1>
+            </div>
+            
+            <!-- SCRAPER CONTROL PANEL -->
+            <div class="control-panel glass-card">
+                <h2>Scraper Status</h2>
+                <div class="status-indicator">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Idle</span>
+                </div>
+                
+                <div class="progress-container hidden" id="progressContainer">
+                    <div class="progress-header">
+                        <span id="progressCompany">Processing...</span>
+                        <span id="progressRatio">0/0</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                </div>
+                
+                <div class="control-buttons">
+                    <button class="btn btn-primary" id="btnStart" onclick="startScraper()">Start Crawling</button>
+                    <button class="btn btn-danger hidden" id="btnStop" onclick="stopScraper()">Stop</button>
+                </div>
+            </div>
+
+            <!-- LIVE CONSOLE LOGS -->
+            <div class="console-panel glass-card">
+                <div class="console-header">
+                    <h3>Crawler Engine Logs</h3>
+                    <button class="console-clear" onclick="clearLocalLogs()">Clear</button>
+                </div>
+                <div class="console-log" id="consoleLogs">
+                    <div class="log-entry system">[SYSTEM] Ready. Click 'Start Crawling' to crawl BSR Towers.</div>
+                </div>
+            </div>
+            
+            <!-- SYSTEM METRICS -->
+            <div class="metrics-grid">
+                <div class="metric-card glass-card">
+                    <span class="metric-icon">🏢</span>
+                    <div class="metric-content">
+                        <span class="metric-val" id="metricTotal">0</span>
+                        <span class="metric-lbl">Total Businesses</span>
+                    </div>
+                </div>
+                <div class="metric-card glass-card">
+                    <span class="metric-icon">🔗</span>
+                    <div class="metric-content">
+                        <span class="metric-val" id="metricResolved">0</span>
+                        <span class="metric-lbl">Resolved Sites</span>
+                    </div>
+                </div>
+                <div class="metric-card glass-card">
+                    <span class="metric-icon">💼</span>
+                    <div class="metric-content">
+                        <span class="metric-val" id="metricJobs">0</span>
+                        <span class="metric-lbl">With Careers</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN DASHBOARD -->
+        <main class="main-content">
+            
+            <!-- FILTER HEADER -->
+            <header class="header glass-card">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchInput" placeholder="Search by company name, category or job title..." oninput="filterCompanies()">
+                </div>
+                
+                <div class="filters-row">
+                    <!-- Tower Filter -->
+                    <div class="filter-group">
+                        <label>Tower</label>
+                        <div class="filter-pills" id="towerPills">
+                            <button class="pill active" data-tower="ALL" onclick="setTowerFilter('ALL')">ALL</button>
+                            <button class="pill" data-tower="C" onclick="setTowerFilter('C')">C</button>
+                            <button class="pill" data-tower="I" onclick="setTowerFilter('I')">I</button>
+                            <button class="pill" data-tower="T" onclick="setTowerFilter('T')">T</button>
+                            <button class="pill" data-tower="Y" onclick="setTowerFilter('Y')">Y</button>
+                        </div>
+                    </div>
+
+                    <!-- Status Filter -->
+                    <div class="filter-group">
+                        <label>Careers Status</label>
+                        <select id="statusFilter" onchange="filterCompanies()">
+                            <option value="ALL">All States</option>
+                            <option value="HAS_JOBS">Has Open Positions</option>
+                            <option value="NO_URL">No Website Resolved</option>
+                            <option value="PENDING">Pending Scrape</option>
+                            <option value="COMPLETED">Scraped Successfully</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- RESULTS LIST -->
+            <div class="results-wrapper">
+                <div class="results-header">
+                    <h2>Directory Listings</h2>
+                    <span class="count-badge" id="resultsCount">Showing 0 companies</span>
+                </div>
+                
+                <div class="grid-container" id="companiesGrid">
+                    <!-- Cards injected by JS -->
+                    <div class="loading-state">Loading BSR Towers directory database...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- JOBS DETAIL MODAL -->
+    <div class="modal-overlay hidden" id="jobModal">
+        <div class="modal glass-card">
+            <button class="modal-close" onclick="closeJobModal()">✕</button>
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="tower-badge" id="modalTower">C</span>
+                    <h2 id="modalName">Company Name</h2>
+                </div>
+                <p id="modalCategory" class="modal-subtitle">Category</p>
+            </div>
+            
+            <div class="modal-layout">
+                <!-- Left: jobs -->
+                <div class="modal-jobs-section">
+                    <div class="section-title">
+                        <h3>Open Positions</h3>
+                        <span class="status-badge" id="modalLlmBadge">Local Filter (LLM Pending)</span>
+                    </div>
+                    <div class="jobs-list" id="modalJobsList">
+                        <!-- Jobs injected by JS -->
+                    </div>
+                </div>
+                
+                <!-- Right: Metadata & Info -->
+                <div class="modal-info-sidebar">
+                    <div class="info-group">
+                        <label>Floor & Location</label>
+                        <p id="modalFloor">Floor 0, Southern Building</p>
+                    </div>
+                    <div class="info-group">
+                        <label>Representative</label>
+                        <p id="modalRepresentative">-</p>
+                    </div>
+                    <div class="info-group">
+                        <label>Website URL</label>
+                        <a href="#" target="_blank" id="modalWebsiteLink" class="website-link">Visit Website 🔗</a>
+                    </div>
+                    <div class="info-group" id="modalCareersGroup">
+                        <label>Careers Page URL</label>
+                        <a href="#" target="_blank" id="modalCareersLink" class="website-link" style="color: var(--cyan); font-weight: 800; text-shadow: 0 0 10px rgba(0,242,254,0.3);">Go to Careers Page 🔗</a>
+                    </div>
+                    
+                    <div class="contact-buttons">
+                        <a id="modalCall" href="#" class="contact-btn call-btn">
+                            <span>📞 Call Reception</span>
+                        </a>
+                        <a id="modalWhatsapp" href="#" class="contact-btn wa-btn">
+                            <span>💬 WhatsApp</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- URL EDIT DIALOG -->
+    <div class="modal-overlay hidden" id="urlModal">
+        <div class="modal glass-card small-modal">
+            <button class="modal-close" onclick="closeUrlModal()">✕</button>
+            <h2>Update Website URL</h2>
+            <p class="dialog-desc">Provide the website URL manually. Saving will reset the crawler status to pending, allowing it to crawl jobs on the next run.</p>
+            
+            <div class="input-group">
+                <label>Company Website</label>
+                <input type="url" id="editUrlInput" placeholder="https://example.com">
+            </div>
+            
+            <div class="dialog-buttons">
+                <button class="btn btn-secondary" onclick="closeUrlModal()">Cancel</button>
+                <button class="btn btn-primary" id="btnSaveUrl" onclick="saveCompanyUrl()">Save Website</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

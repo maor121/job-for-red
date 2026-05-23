@@ -269,7 +269,10 @@ def search_website_for_business(business_name):
     Resolves a business name to their official website using multi-engine fallbacks (DDG -> Yahoo -> Bing).
     Completely immune to DDG rate-limiting. Employs Gemini or strict local heuristics.
     """
-    query = f"{business_name} בסר פתח תקווה"
+    # Clean up the search query itself by replacing slashes/dashes/commas with spaces
+    # Otherwise slashes in search queries confuse search engine request parsers!
+    clean_business_name = business_name.replace("/", " ").replace("-", " ").replace(",", " ")
+    query = f"{clean_business_name} בסר פתח תקווה"
     
     # 1. Query DuckDuckGo
     print(f"[SEARCH RESOLVER] Querying DuckDuckGo: '{query}'...")
@@ -285,6 +288,9 @@ def search_website_for_business(business_name):
         
     # 4. Process results if any engine succeeded
     if results:
+        print(f"[SEARCH RESOLVER] Found {len(results)} potential search results for '{business_name}':")
+        for idx, r in enumerate(results[:3]):
+            print(f"  Result #{idx+1}: URL='{r['url']}' | Title='{r['title']}'")
         # --- Mode A: Gemini AI Verification ---
         if HAS_GEMINI and gemini_model:
             try:

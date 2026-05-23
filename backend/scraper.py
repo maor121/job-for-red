@@ -146,45 +146,31 @@ def clean_domain(url):
             
     return url
 
-def search_website_for_business(business_name):
-    """
-    Uses DuckDuckGo HTML search to resolve a business name to a website.
-    Employs Gemini LLM verification or a strict local heuristic text matcher to prevent false positives.
-    """
-    query = f"{business_name} בסר פתח תקווה"
+def scrape_ddg(query):
+    """Query DuckDuckGo for organic results."""
     encoded_query = urllib.parse.quote_plus(query)
     search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
-    
-    print(f"[SEARCH RESOLVER] Querying DuckDuckGo: '{query}'...")
     try:
         response = requests.get(search_url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Extract structured search results
             results = []
             for result_div in soup.find_all('div', class_='result'):
-                # Extract URL
                 a_title = result_div.find('a', class_='result__title')
                 if not a_title:
                     continue
-                    
                 href = a_title.get('href')
                 if not href:
                     continue
-                    
                 title_text = a_title.get_text(strip=True)
                 
-                # Resolve DDG redirect URL if present
                 parsed_href = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)
                 resolved_url = parsed_href['uddg'][0] if 'uddg' in parsed_href else href
                 
-                # Filter out ignored domains
                 cleaned_url = clean_domain(resolved_url)
                 if not cleaned_url:
                     continue
-                    
-                # Extract Snippet text
+                
                 div_snippet = result_div.find('a', class_='result__snippet')
                 snippet_text = div_snippet.get_text(strip=True) if div_snippet else ""
                 
@@ -193,70 +179,168 @@ def search_website_for_business(business_name):
                     'title': title_text,
                     'snippet': snippet_text
                 })
-                
-            if results:
-                # --- Mode A: Gemini AI Verification ---
-                if HAS_GEMINI and gemini_model:
-                    try:
-                        print(f"[SEARCH RESOLVER] Querying Gemini to select official site from search results...")
-                        results_summary = "\n".join([f"- Title: '{r['title']}'\n  URL: '{r['url']}'\n  Desc: '{r['snippet']}'" for r in results[:4]])
-                        prompt = (
-                            f"You are a web crawling assistant. A company named '{business_name}' is located in B.S.R. Towers in Petah Tikva, Israel.\n"
-                            f"Here are the top search results for this company:\n\n"
-                            f"{results_summary}\n\n"
-                            f"Determine which URL is the actual official homepage of the company '{business_name}'.\n"
-                            f"- Respond ONLY with the exact URL.\n"
-                            f"- Exclude third-party directories, general tower portals (like bsr.co.il), unrelated blogs, or other companies.\n"
-                            f"- If there is NO official website for the company among these results, respond with the string 'NULL'."
-                        )
-                        llm_res = gemini_model.generate_content(prompt)
-                        selected_url = llm_res.text.strip().replace('`', '')
-                        
-                        if selected_url and selected_url != "NULL" and selected_url.startswith("http"):
-                            print(f"[SEARCH RESOLVER] Gemini verified website: {selected_url}")
-                            return selected_url
-                        else:
-                            print(f"[SEARCH RESOLVER] Gemini determined that company '{business_name}' has no official website in search results.")
-                            return None
-                    except Exception as e:
-                        print(f"[SEARCH RESOLVER] Gemini verification exception: {e}. Falling back to strict local heuristic.")
-                
-                # --- Mode B: Strict Local Heuristic Match ---
-                # Split business name into keywords, ignoring stop-words and splitting by delimiters cleanly
-                stop_words = {'בע"מ', 'בעמ', 'ישראל', 'קבוצת', 'שירותי', 'שרותי', 'מערכות', 'פתרונות', 'כספים', 'אחזקות', 'ltd', 'group', 'israel', 'systems', 'solutions', 'holdings', 'services', 'inc', 'corp', 'co'}
-                normalized_name = business_name.replace("/", " ").replace("-", " ").replace(",", " ")
-                name_words = [re.sub(r'[^\w\s]', '', w).lower() for w in normalized_name.split()]
-                keywords = [w for w in name_words if len(w) > 1 and w not in stop_words]
-                
-                if not keywords:
-                    # If all words were stop-words, fallback to the full cleaned name
-                    keywords = [re.sub(r'[^\w\s]', '', business_name).lower()]
-                
-                print(f"[SEARCH RESOLVER] Running strict local keywords search: {keywords}")
-                
-                for r in results[:4]:
-                    title_lower = r['title'].lower()
-                    snippet_lower = r['snippet'].lower()
-                    url_lower = r['url'].lower()
-                    
-                    # Check if ANY keyword matches the search result
-                    # Match in title, URL, OR snippet description for high-recall Hebrew-to-English resolution
-                    matched = False
-                    for kw in keywords:
-                        if kw in title_lower or kw in url_lower or kw in snippet_lower:
-                            matched = True
-                            break
-                            
-                    if matched:
-                        print(f"[SEARCH RESOLVER] Strictly resolved website: {r['url']}")
-                        return r['url']
-                        
-                print(f"[SEARCH RESOLVER] Strictly rejected all results for '{business_name}' due to keyword mismatch.")
-                
-        else:
-            print(f"[SEARCH RESOLVER] Search failed with code: {response.status_code}")
+            return results
     except Exception as e:
-        print(f"[SEARCH RESOLVER] DuckDuckGo search exception: {e}")
+        print(f"[SEARCH RESOLVER] DDG parser error: {e}")
+    return []
+
+def scrape_yahoo(query):
+    """Query Yahoo Search as a reliable fallback."""
+    encoded_query = urllib.parse.quote_plus(query)
+    url = f"https://search.yahoo.com/search?q={encoded_query}"
+    print(f"[SEARCH RESOLVER] Querying Yahoo fallback: '{query}'...")
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            for div in soup.find_all('div', class_='algo'):
+                a = div.find('a')
+                if not a:
+                    continue
+                href = a.get('href')
+                if not href or href.startswith(('javascript:', '#')):
+                    continue
+                
+                # Extract clean URL from Yahoo redirect
+                if 'RU=' in href:
+                    parsed = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)
+                    if 'RU' in parsed:
+                        href = parsed['RU'][0]
+                        
+                cleaned = clean_domain(href)
+                if not cleaned:
+                    continue
+                
+                title = a.get_text(strip=True)
+                
+                snippet_div = div.find(class_='compText') or div.find('p') or div.find('span')
+                snippet = snippet_div.get_text(strip=True) if snippet_div else ""
+                
+                results.append({
+                    'url': cleaned,
+                    'title': title,
+                    'snippet': snippet
+                })
+            return results
+    except Exception as e:
+        print(f"[SEARCH RESOLVER] Yahoo parser error: {e}")
+    return []
+
+def scrape_bing(query):
+    """Query Bing Search as a reliable fallback."""
+    encoded_query = urllib.parse.quote_plus(query)
+    url = f"https://www.bing.com/search?q={encoded_query}"
+    print(f"[SEARCH RESOLVER] Querying Bing fallback: '{query}'...")
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            for li in soup.find_all('li', class_='b_algo'):
+                h2 = li.find('h2')
+                a = h2.find('a') if h2 else li.find('a')
+                if not a:
+                    continue
+                href = a.get('href')
+                if not href or href.startswith(('javascript:', '#')):
+                    continue
+                    
+                cleaned = clean_domain(href)
+                if not cleaned:
+                    continue
+                    
+                title = a.get_text(strip=True)
+                snippet_div = li.find('p') or li.find('span')
+                snippet = snippet_div.get_text(strip=True) if snippet_div else ""
+                
+                results.append({
+                    'url': cleaned,
+                    'title': title,
+                    'snippet': snippet
+                })
+            return results
+    except Exception as e:
+        print(f"[SEARCH RESOLVER] Bing parser error: {e}")
+    return []
+
+def search_website_for_business(business_name):
+    """
+    Resolves a business name to their official website using multi-engine fallbacks (DDG -> Yahoo -> Bing).
+    Completely immune to DDG rate-limiting. Employs Gemini or strict local heuristics.
+    """
+    query = f"{business_name} בסר פתח תקווה"
+    
+    # 1. Query DuckDuckGo
+    print(f"[SEARCH RESOLVER] Querying DuckDuckGo: '{query}'...")
+    results = scrape_ddg(query)
+    
+    # 2. Query Yahoo Fallback if blocked
+    if not results:
+        results = scrape_yahoo(query)
+        
+    # 3. Query Bing Fallback if Yahoo also fails
+    if not results:
+        results = scrape_bing(query)
+        
+    # 4. Process results if any engine succeeded
+    if results:
+        # --- Mode A: Gemini AI Verification ---
+        if HAS_GEMINI and gemini_model:
+            try:
+                print(f"[SEARCH RESOLVER] Querying Gemini to select official site from search results...")
+                results_summary = "\n".join([f"- Title: '{r['title']}'\n  URL: '{r['url']}'\n  Desc: '{r['snippet']}'" for r in results[:4]])
+                prompt = (
+                    f"You are a web crawling assistant. A company named '{business_name}' is located in B.S.R. Towers in Petah Tikva, Israel.\n"
+                    f"Here are the top search results for this company:\n\n"
+                    f"{results_summary}\n\n"
+                    f"Determine which URL is the actual official homepage of the company '{business_name}'.\n"
+                    f"- Respond ONLY with the exact URL.\n"
+                    f"- Exclude third-party directories, general tower portals (like bsr.co.il), unrelated blogs, or other companies.\n"
+                    f"- If there is NO official website for the company among these results, respond with the string 'NULL'."
+                )
+                llm_res = gemini_model.generate_content(prompt)
+                selected_url = llm_res.text.strip().replace('`', '')
+                
+                if selected_url and selected_url != "NULL" and selected_url.startswith("http"):
+                    print(f"[SEARCH RESOLVER] Gemini verified website: {selected_url}")
+                    return selected_url
+                else:
+                    print(f"[SEARCH RESOLVER] Gemini determined that company '{business_name}' has no official website in search results.")
+                    return None
+            except Exception as e:
+                print(f"[SEARCH RESOLVER] Gemini verification exception: {e}. Falling back to strict local heuristic.")
+        
+        # --- Mode B: Strict Local Heuristic Match ---
+        stop_words = {'בע"מ', 'בעמ', 'ישראל', 'קבוצת', 'שירותי', 'שרותי', 'מערכות', 'פתרונות', 'כספים', 'אחזקות', 'ltd', 'group', 'israel', 'systems', 'solutions', 'holdings', 'services', 'inc', 'corp', 'co'}
+        normalized_name = business_name.replace("/", " ").replace("-", " ").replace(",", " ")
+        name_words = [re.sub(r'[^\w\s]', '', w).lower() for w in normalized_name.split()]
+        keywords = [w for w in name_words if len(w) > 1 and w not in stop_words]
+        
+        if not keywords:
+            keywords = [re.sub(r'[^\w\s]', '', business_name).lower()]
+        
+        print(f"[SEARCH RESOLVER] Running strict local keywords search: {keywords}")
+        
+        for r in results[:4]:
+            title_lower = r['title'].lower()
+            snippet_lower = r['snippet'].lower()
+            url_lower = r['url'].lower()
+            
+            matched = False
+            for kw in keywords:
+                if kw in title_lower or kw in url_lower or kw in snippet_lower:
+                    matched = True
+                    break
+                    
+            if matched:
+                print(f"[SEARCH RESOLVER] Strictly resolved website: {r['url']}")
+                return r['url']
+                
+        print(f"[SEARCH RESOLVER] Strictly rejected all results for '{business_name}' due to keyword mismatch.")
+        
+    else:
+        print(f"[SEARCH RESOLVER] All search engines (DDG, Yahoo, Bing) returned 0 results. Rate-limited or offline.")
         
     return None
 

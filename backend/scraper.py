@@ -612,8 +612,8 @@ def run_scraper_process():
                 site_url = search_website_for_business(name)
                 
                 if not site_url:
-                    # Failed to find website, mark as completed but without URL
-                    database.save_scraped_data(company_id, None, None, "", [], [], 'FAILED')
+                    # Failed to find website, mark as completed but without URL (avoids repeated searches)
+                    database.save_scraped_data(company_id, None, None, "", [], [], 'COMPLETED')
                     ScrapingProgress.log(f"No website resolved for '{name}'. Skipping crawler.")
                     time.sleep(1.5)
                     continue

@@ -104,7 +104,7 @@ def re_scrape_company(company_id: int):
             database.update_company_status(company_id, 'RESOLVING_SITE')
             site_url = scraper.search_website_for_business(name)
             if not site_url:
-                database.save_scraped_data(company_id, None, None, "", [], [], 'FAILED')
+                database.save_scraped_data(company_id, None, None, "", [], [], 'COMPLETED')
                 return {"status": "failed", "message": "Could not resolve company website url"}
             else:
                 database.update_company_url(company_id, site_url)

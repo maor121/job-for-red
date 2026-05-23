@@ -4,6 +4,12 @@ import sys
 # Ensure backend folder is in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Force UTF-8 console encoding on Windows to prevent UnicodeEncodeError crashes
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import scraper
 
 def test_resolve():

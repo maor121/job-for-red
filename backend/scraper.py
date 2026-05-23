@@ -1,7 +1,14 @@
 import os
+import sys
 import re
 import json
 import time
+
+# Force UTF-8 console encoding on Windows to prevent UnicodeEncodeError console crashes
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import urllib.parse
 import requests
 from bs4 import BeautifulSoup

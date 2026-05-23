@@ -1,6 +1,14 @@
 import os
+import sys
 import threading
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+
+# Force UTF-8 console encoding on Windows to prevent UnicodeEncodeError console crashes
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
